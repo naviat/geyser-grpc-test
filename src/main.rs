@@ -3,9 +3,22 @@ use tonic::transport::Channel;
 use yellowstone_grpc_proto::geyser::geyser_client::GeyserClient;
 use yellowstone_grpc_proto::prelude::*;
 use futures::stream;
+mod simple_test;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Check if user wants to run simple test
+    let args: Vec<String> = std::env::args().collect();
+    let run_simple = args.len() > 1 && args[1] == "--simple";
+    
+    if run_simple {
+        println!("Running Simple Geyser Test");
+        println!("==========================");
+        simple_test::simple_geyser_test().await?;
+        println!("Simple test completed!");
+        return Ok(());
+    }
+
     println!("Testing Geyser gRPC Pubkey Limit");
     println!("=================================");
 

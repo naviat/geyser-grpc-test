@@ -1,6 +1,8 @@
 use tonic::transport::Channel;
 use yellowstone_grpc_proto::geyser::geyser_client::GeyserClient;
-use yellowstone_grpc_proto::geyser::SubscribeRequest;
+use yellowstone_grpc_proto::prelude::*;
+use futures::stream;
+use std::collections::HashMap;
 
 pub async fn simple_geyser_test() -> Result<(), Box<dyn std::error::Error>> {
     // Connect to gRPC endpoint
@@ -85,15 +87,52 @@ pub async fn simple_geyser_test() -> Result<(), Box<dyn std::error::Error>> {
         "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD",   // Marginfi
     ];
 
-    // This is a minimal request that should trigger the error
-    let request = tonic::Request::new(SubscribeRequest::default());
+    println!("Simple test: Testing with {} pubkeys", pubkeys.len());
+
+    // Create account filters from pubkeys
+    let mut account_filters = HashMap::new();
+    for (i, pubkey_str) in pubkeys.iter().enumerate() {
+        account_filters.insert(
+            format!("account_{}", i),
+            SubscribeRequestFilterAccounts {
+                account: vec![pubkey_str.to_string()],
+                owner: vec![],
+                filters: vec![],
+                nonempty_txn_signature: Some(false),
+            }
+        );
+    }
+
+    // Create subscription request
+    let subscribe_request = SubscribeRequest {
+        accounts: account_filters,
+        slots: HashMap::new(),
+        transactions: HashMap::new(),
+        transactions_status: HashMap::new(),
+        blocks: HashMap::new(),
+        blocks_meta: HashMap::new(),
+        entry: HashMap::new(),
+        commitment: Some(CommitmentLevel::Confirmed as i32),
+        accounts_data_slice: vec![],
+        ping: None,
+        from_slot: Some(0),
+    };
+
+    // Test subscription with streaming request
+    let request_stream = stream::once(async { subscribe_request });
     
-    match client.subscribe(request).await {
-        Ok(_) => println!("Subscription worked"),
+    match client.subscribe(request_stream).await {
+        Ok(_) => {
+            println!("✓ Simple test: Subscription successful! Node supports more than 50 pubkeys.");
+        }
         Err(e) => {
-            println!("Error: {:?}", e);
-            if e.message().contains("Max amount of Pubkeys reached, only 50 allowed") {
-                println!("🎯 Found the exact error!");
+            println!("✗ Simple test: Subscription failed with error:");
+            println!("   Status: {:?}", e);
+            let error_msg = format!("{:?}", e);
+            if error_msg.contains("Max amount of Pubkeys reached, only 50 allowed") {
+                println!("Node still enforces the 50 pubkey limit.");
+            } else {
+                println!("❓ Got a different error - check if your gRPC node supports Geyser");
             }
         }
     }
